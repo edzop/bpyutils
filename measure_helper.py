@@ -21,12 +21,7 @@ import bpy
 import bmesh
 import csv
 from math import radians, degrees
-from bpy.props import *
-from bpy.props import FloatProperty, BoolProperty, FloatVectorProperty
 
-import queue
-
-from ..hullgen import curve_helper
 from ..bpyutils import material_helper
 from ..bpyutils import bpy_helper
 
@@ -34,20 +29,11 @@ bouyancy_text_object=None
 bouyancy_text_object_name="bouyancy_text"
 CG_object_name="CG"
 
-#from math import radians, degrees
-#from bpy.props import *
-#from bpy.props import FloatProperty, BoolProperty, FloatVectorProperty
-
-
-#from ..hullsim import bpy_helper
-#from ..hullsim import material_helper
-
 # hard coded to 5083 aluminum for now
 # expressed as KG per m3
 aluminum_weight=2653
 
 material_weight=aluminum_weight
-
 
 
 # =======================================================================================
@@ -80,9 +66,6 @@ def bmesh_copy_from_object(obj, transform=True, triangulate=True, apply_modifier
 		else:
 			bm = bmesh.new()
 			bm.from_mesh(me)
-
-	# TODO. remove all customdata layers.
-	# would save ram
 
 	if transform:
 		bm.transform(obj.matrix_world)
@@ -243,57 +226,6 @@ def import_plates(filename):
 			bpy.ops.object.mode_set(mode='OBJECT')
 
 
-
-def import_plates_OLD(filename):
-
-	bpy.ops.import_curve.svg(filepath=filename)
-
-	found_curve=False
-
-	for obj in bpy.data.objects:
-		if obj.type=="CURVE":
-			if obj.name.startswith("Curve"):
-
-				if found_curve==False:
-					bpy.context.view_layer.objects.active = obj
-					found_curve=True
-				
-				obj.select_set(state=True)
-
-	if found_curve==True:
-		obj = bpy.context.view_layer.objects.active
-		print("found curve: %s"%obj.name)
-		bpy.ops.object.convert(target='MESH')
-		bpy.ops.object.join()
-		
-		bpy.ops.object.mode_set(mode='EDIT')
-		bpy.ops.mesh.select_all(action='SELECT')
-		bpy.ops.mesh.remove_doubles()
-		bpy.ops.mesh.select_mode(type="EDGE")
-		bpy.ops.mesh.select_all(action='DESELECT')
-		bpy.ops.object.mode_set(mode='OBJECT')
-
-		obj.data.edges[0].select=True
-		bpy.ops.object.mode_set(mode='EDIT')
-		#bpy.ops.mesh.select_similar(type='FACE', compare='LESS', threshold=1)
-		bpy.ops.mesh.select_similar(type='FACE', threshold=1)
-		
-		# sometime models need to invert this sometimes not - not sure why...
-		# Should create toggle?
-		bpy.ops.mesh.select_all(action='INVERT')
-		bpy.ops.mesh.delete(type='EDGE')
-		
-		bpy.ops.mesh.select_mode(type="VERT")
-		bpy.ops.mesh.select_all(action='DESELECT')
-		bpy.ops.mesh.select_loose()
-		bpy.ops.mesh.delete(type='VERT')
-
-		bpy.ops.mesh.select_all(action='SELECT')
-		bpy.ops.mesh.separate(type='LOOSE')
-		bpy.ops.mesh.select_mode(type="EDGE")
-
-		bpy.ops.object.mode_set(mode='OBJECT')
-
 def export_dxf(filename):
 
 	# For some reason it doens't work if there is no material in slot 0
@@ -325,9 +257,6 @@ def export_dxf(filename):
 			print("DXF export failed - check export DXF addon is installed?")
 			return False
 	
-	
-		
-
 
 def export_plates(filename):
 	bpy.ops.object.mode_set(mode='EDIT')
@@ -492,8 +421,6 @@ def scale_to_size(scale_to_size):
 			bpy_helper.select_object(obj,True)
 
 			bpy.ops.transform.resize(value=(scale_factor,scale_factor,scale_factor))
-
-
 
 
 # Gets the distance between two selected vertices on selected object
