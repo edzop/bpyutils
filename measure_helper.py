@@ -21,7 +21,7 @@ import bpy
 import bmesh
 import csv
 
-from ..hullsim import bpy_helper
+from ..bpyutils import bpy_helper
 
 CG_object_name="CG"
 
