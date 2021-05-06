@@ -33,6 +33,8 @@ CG_object_name="CG"
 # expressed as KG per m3
 aluminum_weight=2653
 
+# hdpe 970 KG per m3
+
 material_weight=aluminum_weight
 
 
@@ -147,7 +149,7 @@ def calculate_cg(influence_objects):
 
 
 
-		# hdpe 970 KG per m3
+
 
 		# hard coded 3mm for now
 		material_thickness=0.003
@@ -232,7 +234,7 @@ def measure_object_volume(obj):
 
 	aluminum_weight=volume*material_weight
 
-	print("Volume: %f (Aluminum: %f)"%(volume,aluminum_weight))
+	#print("Volume: %f (Aluminum: %f)"%(volume,aluminum_weight))
 
 	return volume
 
