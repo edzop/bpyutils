@@ -20,9 +20,18 @@ import bpy
 
 import bmesh
 import csv
+from math import radians, degrees
+from bpy.props import *
+from bpy.props import FloatProperty, BoolProperty, FloatVectorProperty
 
+import queue
+
+from ..hullgen import curve_helper
+from ..bpyutils import material_helper
 from ..bpyutils import bpy_helper
 
+bouyancy_text_object=None
+bouyancy_text_object_name="bouyancy_text"
 CG_object_name="CG"
 
 #from math import radians, degrees
@@ -82,6 +91,42 @@ def bmesh_copy_from_object(obj, transform=True, triangulate=True, apply_modifier
 		bmesh.ops.triangulate(bm, faces=bm.faces)
 
 	return bm
+
+
+def measure_object_volume(obj):
+
+	bm = bmesh_copy_from_object(obj, apply_modifiers=True)
+	volume = bm.calc_volume()
+	bm.free()
+
+	return volume
+
+def measure_selected_faces_area(obj,SelectAll=False):
+
+	previous_mode=obj.mode
+
+	# Selection not accurate if not in object mode... 
+	bpy.ops.object.mode_set(mode='OBJECT')
+
+	selected_face_count=0
+	total_area=0
+
+	if SelectAll==True:
+		bpy_helper.select_object(obj,True)
+		bpy.ops.object.mode_set(mode='EDIT')
+		bpy.ops.mesh.select_all(action='SELECT')
+		bpy.ops.object.mode_set(mode='OBJECT')
+
+	for f in obj.data.polygons:
+		if f.select:
+			selected_face_count+=1
+			total_area+=f.area
+
+	face_data=[selected_face_count,total_area]
+
+	bpy.ops.object.mode_set(mode=previous_mode)
+
+	return face_data
 
 
 # returns empty object representing center of gravity location
@@ -162,8 +207,209 @@ def calculate_cg(influence_objects):
 	assign_weight(cg_empty,total_weight)
 	
 	return cg_empty
+	
+def import_plates(filename):
+
+	for obj in bpy.context.selected_objects:
+		if obj.type=="MESH":
+			bpy_helper.select_object(obj,True)
+			
+			bpy.ops.object.mode_set(mode='EDIT')
+			bpy.ops.mesh.select_all(action='SELECT')
+			bpy.ops.mesh.remove_doubles()
+			bpy.ops.mesh.select_mode(type="EDGE")
+			bpy.ops.mesh.select_all(action='DESELECT')
+			bpy.ops.object.mode_set(mode='OBJECT')
+
+			obj.data.edges[0].select=True
+			bpy.ops.object.mode_set(mode='EDIT')
+			#bpy.ops.mesh.select_similar(type='FACE', compare='LESS', threshold=1)
+			bpy.ops.mesh.select_similar(type='FACE', threshold=1)
+			
+			# sometime models need to invert this sometimes not - not sure why...
+			# Should create toggle?
+			bpy.ops.mesh.select_all(action='INVERT')
+			bpy.ops.mesh.delete(type='EDGE')
+			
+			bpy.ops.mesh.select_mode(type="VERT")
+			bpy.ops.mesh.select_all(action='DESELECT')
+			bpy.ops.mesh.select_loose()
+			bpy.ops.mesh.delete(type='VERT')
+
+			bpy.ops.mesh.select_all(action='SELECT')
+			bpy.ops.mesh.separate(type='LOOSE')
+			bpy.ops.mesh.select_mode(type="EDGE")
+
+			bpy.ops.object.mode_set(mode='OBJECT')
 
 
+
+def import_plates_OLD(filename):
+
+	bpy.ops.import_curve.svg(filepath=filename)
+
+	found_curve=False
+
+	for obj in bpy.data.objects:
+		if obj.type=="CURVE":
+			if obj.name.startswith("Curve"):
+
+				if found_curve==False:
+					bpy.context.view_layer.objects.active = obj
+					found_curve=True
+				
+				obj.select_set(state=True)
+
+	if found_curve==True:
+		obj = bpy.context.view_layer.objects.active
+		print("found curve: %s"%obj.name)
+		bpy.ops.object.convert(target='MESH')
+		bpy.ops.object.join()
+		
+		bpy.ops.object.mode_set(mode='EDIT')
+		bpy.ops.mesh.select_all(action='SELECT')
+		bpy.ops.mesh.remove_doubles()
+		bpy.ops.mesh.select_mode(type="EDGE")
+		bpy.ops.mesh.select_all(action='DESELECT')
+		bpy.ops.object.mode_set(mode='OBJECT')
+
+		obj.data.edges[0].select=True
+		bpy.ops.object.mode_set(mode='EDIT')
+		#bpy.ops.mesh.select_similar(type='FACE', compare='LESS', threshold=1)
+		bpy.ops.mesh.select_similar(type='FACE', threshold=1)
+		
+		# sometime models need to invert this sometimes not - not sure why...
+		# Should create toggle?
+		bpy.ops.mesh.select_all(action='INVERT')
+		bpy.ops.mesh.delete(type='EDGE')
+		
+		bpy.ops.mesh.select_mode(type="VERT")
+		bpy.ops.mesh.select_all(action='DESELECT')
+		bpy.ops.mesh.select_loose()
+		bpy.ops.mesh.delete(type='VERT')
+
+		bpy.ops.mesh.select_all(action='SELECT')
+		bpy.ops.mesh.separate(type='LOOSE')
+		bpy.ops.mesh.select_mode(type="EDGE")
+
+		bpy.ops.object.mode_set(mode='OBJECT')
+
+def export_dxf(filename):
+
+	# For some reason it doens't work if there is no material in slot 0
+	# even when you specify entitycolor from obj.layer 
+
+	default_material=material_helper.get_material_default()
+
+	# First make 
+	for obj in bpy.data.objects:
+		if obj.type=="MESH":
+			if len(obj.data.materials)==0:
+				material_helper.assign_material(obj,default_material)
+
+			if obj.data.materials[0]==None:
+				material_helper.assign_material(obj,default_material)
+
+	try:
+		bpy.ops.export.dxf(filepath="bpyhullgen.dxf", 
+		projectionThrough='NO', 
+		onlySelected=True, 
+		apply_modifiers=True, 
+		mesh_as='3DFACEs', 
+		entitylayer_from='obj.data.name', 
+		entitycolor_from='obj.layer', 
+		entityltype_from='CONTINUOUS', 
+		layerName_from='LAYERNAME_DEF', 
+		verbose=True)
+	except Exception as e:
+			print("DXF export failed - check export DXF addon is installed?")
+			return False
+	
+	
+		
+
+
+def export_plates(filename):
+	bpy.ops.object.mode_set(mode='EDIT')
+	bpy.ops.mesh.select_all(action='SELECT')
+
+	#bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=0.001)
+	#bpy.ops.uv.export_layout(filepath="plates1.svg", mode='SVG', size=(1024, 1024))
+
+	bpy.ops.uv.smart_project(scale_to_bounds=False,island_margin=0.03)
+	bpy.ops.uv.export_layout(filepath=filename, mode='SVG', size=(4800, 4800),opacity=1)
+
+	bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def exportCSV():
+
+	with open('hull_export.csv', 'w', newline='') as csvfile:
+		csvWriter = csv.writer(csvfile, delimiter=',',
+					quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+		csv_row = []
+
+		csv_row.append("name")
+		csv_row.append("posX")
+		csv_row.append("posY")
+		csv_row.append("posZ")
+
+		csv_row.append("volume")
+
+		csv_row.append("face_count")
+		csv_row.append("surface_area")
+
+		csv_row.append("sizeX")
+		csv_row.append("sizeY")
+		csv_row.append("sizeZ")
+
+		csvWriter.writerow(csv_row)
+
+		#for obj in bpy.context.selected_objects:
+		#for obj in bpy.data.objects:
+		for obj in bpy.context.view_layer.objects:
+
+			if obj.type=="MESH":
+
+				print("export: %s %s"%(obj.name,obj.type))
+
+				if bpy_helper.is_object_hidden_from_view(obj)==False:
+				#if obj.hide_viewport==False:
+
+					csv_row = []
+					csv_row.append(obj.name)
+					csv_row.append(obj.location.x)
+					csv_row.append(obj.location.y)
+					csv_row.append(obj.location.z)
+
+					vol=measure_object_volume(obj)
+					csv_row.append(vol)
+
+					face_data=measure_selected_faces_area(obj,True)
+					csv_row.append(face_data[0])
+					csv_row.append(face_data[1])
+
+					csv_row.append(obj.dimensions.x)
+					csv_row.append(obj.dimensions.y)
+					csv_row.append(obj.dimensions.z)
+
+					csvWriter.writerow(csv_row)
+
+		csv_row = [" "]
+		csvWriter.writerow(csv_row)
+
+		csv_row = ["mm","0.001"]
+		csvWriter.writerow(csv_row)
+
+		csv_row = ["5083 aluminum","2653","KG per M3"]
+		csvWriter.writerow(csv_row)
+
+		csv_row = ["steel","7900","KG per M3"]
+		csvWriter.writerow(csv_row)
+
+		csv_row = ["wood","400","KG per M3"]
+		csvWriter.writerow(csv_row)
 
 def measure_object_volume(obj):
 
@@ -204,7 +450,7 @@ def measure_selected_faces_area(obj,SelectAll=False):
 
 	return face_data
 
-	
+
 def assign_weight(obj,weight):
 
 	rna_ui = obj.get('_RNA_UI')
@@ -224,6 +470,31 @@ def assign_weight(obj,weight):
 					}
 
 	obj["weight"]=weight
+
+def scale_to_size(scale_to_size):
+
+	distance=get_distance_between_two_selected_points()
+	print("Scale to: %f %f"%(scale_to_size,distance))
+
+	if distance==0:
+		print("Invalid points (Please select 2 points)")
+		return
+
+	scale_factor=1/(distance/scale_to_size)
+
+	print("Distance: %f Scale to: %f Scale factor: %f"%(distance,scale_to_size,scale_factor))
+
+	bpy.ops.object.mode_set(mode='OBJECT')
+
+	for obj in bpy.data.objects:
+
+		if obj.type=="MESH":
+			bpy_helper.select_object(obj,True)
+
+			bpy.ops.transform.resize(value=(scale_factor,scale_factor,scale_factor))
+
+
+
 
 # Gets the distance between two selected vertices on selected object
 # Assumes you are in edit mode and have only 2 vertices selected
@@ -260,5 +531,54 @@ def get_distance_between_two_selected_points():
 
 	return distance
 		
+
+def measure_selected_edges():
+
+	total_length=0
+	objects_counted=0
+
+	# Code borrowed from Measure Tools - Credit to: Chris Kohl
+
+	# Must apply scale transform otherwise the measurement will be wrong.
+	# However, you could probably calculate the scale delta(?) and adjust the numbers as needed
+	# without forcibly applying scale (If you were smarter than me)
+	#bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+
+	sel = bpy.context.selected_objects
+
+	if len(sel)<1:
+		return 0
+
+	# Measurement has to be done in edit mode.
+	bpy.ops.object.mode_set(mode='EDIT')
+
+	for obj in sel:
+		if obj.type=="MESH":
+			me = obj.data
+			bm = bmesh.from_edit_mesh(me)
+			
+			object_edges = [e for e in bm.edges]
+			
+			perimeter_length = 0.0
+			for e in object_edges:
+				if len(e.link_faces) < 2:
+					# Measure length of e with calc_length
+					perimeter_length = perimeter_length + e.calc_length()
+				elif len(e.link_faces) > 1:
+					bpy.ops.object.mode_set(mode='OBJECT')
+					print("%s: Connected faces detected in selection.  Only works with stand-alone loops of edges or single unconnected faces and n-gons."%obj.name)
+
+
+			print("%03d: '%s' length: %f"%(objects_counted,obj.name,perimeter_length) )
+
+			total_length+=perimeter_length
+			objects_counted+=1
+
+	bpy.ops.object.mode_set(mode='OBJECT')
+
+	return total_length
+	
+
 
 
