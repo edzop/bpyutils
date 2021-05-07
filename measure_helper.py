@@ -21,6 +21,7 @@ import bpy
 import bmesh
 
 from math import radians, degrees
+from mathutils import Vector
 
 from ..bpyutils import material_helper
 from ..bpyutils import bpy_helper
@@ -86,39 +87,54 @@ def measure_object_volume(obj):
 
 	return volume
 
-def measure_selected_faces_area(obj,SelectAll=False):
 
-	previous_mode=obj.mode
+# ===============================================
 
-	# Selection not accurate if not in object mode... 
-	bpy.ops.object.mode_set(mode='OBJECT')
+def triangles (verts):
+	"""enumerate triangles in a face"""
+	for i in range (1, len(verts)-1):
+		yield (verts[0], verts[i], verts[i+1])
 
-	selected_face_count=0
-	total_area=0
 
-	if SelectAll==True:
-		bpy_helper.select_object(obj,True)
-		bpy.ops.object.mode_set(mode='EDIT')
-		bpy.ops.mesh.select_all(action='SELECT')
-		bpy.ops.object.mode_set(mode='OBJECT')
+def cg_mesh (obj):
+	"""center of mass (and volume) of a mesh"""
 
-	for f in obj.data.polygons:
-		if f.select:
-			selected_face_count+=1
-			total_area+=f.area
+	#We only have to do this once:
+	dg = bpy.context.evaluated_depsgraph_get() #getting the dependency graph
 
-	face_data=[selected_face_count,total_area]
+	#This has to be done every time the object updates:
+	ev_ob = obj.evaluated_get(dg) #this gives us the evaluated version of the object. Aka with all modifiers and deformations applied.
 
-	bpy.ops.object.mode_set(mode=previous_mode)
 
-	return face_data
+	center = Vector()
+	volume = 0
+	#mesh = obj.to_mesh ()
+	mesh = ev_ob.to_mesh() #turn it into the mesh data block we want.
+	for face in mesh.polygons:
+		f = face.vertices
+		for t in triangles (f):
+			a,b,c = (mesh.vertices[v].co for v in t)
+			v = a.cross(b).dot(c) / 6
+			center += v * (a+b+c) / 4
+			volume += v
+			
+	#obj.to_mesh_clear()
+	ev_ob.to_mesh_clear()
+
+	if volume == 0: 
+		print ("ZERO VOLUME", obj.name)
+	else: 
+		center /= volume
+
+	return obj.matrix_world @ center
+
+# ================================================
 
 
 # returns empty object representing center of gravity location
 def calculate_cg(influence_objects):
 
-	title_object=influence_objects[0]
-	CG_object_name
+	master_object=influence_objects[0]
 
 	bpy_helper.find_and_remove_object_by_name(CG_object_name)
 
@@ -142,28 +158,28 @@ def calculate_cg(influence_objects):
 
 		object_volume=measure_object_volume(obj)
 
-		face_data=measure_selected_faces_area(obj,True)
+		object_face_area=measure_face_area(obj,True)
 
 		# object surface area in m2
-		object_face_area=face_data[1]
+		#object_face_area=face_data[1]
 
-
-
-
-
-		# hard coded 3mm for now
+		#hard coded 3mm for now
 		material_thickness=0.003
 
 		object_weight=material_thickness*material_weight*object_face_area
+
+		#object_weight=measure_object_volume
 
 		total_weight=total_weight+object_weight
 
 		print("Object: %s Weight: %f KG Total weight: %d KG"%(obj.name,object_weight,total_weight))
 
+		object_cg_location=cg_mesh(obj)
+
 		# Calculate 3D moment tuple for this influence object
-		object_moment=[	object_weight*obj.location.x,
-						object_weight*obj.location.y,
-						object_weight*obj.location.z ]
+		object_moment=[	object_weight*object_cg_location.x,
+						object_weight*object_cg_location.y,
+						object_weight*object_cg_location.z ]
 
 		total_moment[0]=total_moment[0]+object_moment[0]
 		total_moment[1]=total_moment[1]+object_moment[1]
@@ -190,6 +206,8 @@ def calculate_cg(influence_objects):
 		print("Something went wrong... no total weight calculated")
 
 	assign_weight(cg_empty,total_weight)
+
+	bpy_helper.parent_objects_keep_transform(master_object,cg_empty)
 	
 	return cg_empty
 
@@ -238,32 +256,44 @@ def measure_object_volume(obj):
 
 	return volume
 
-def measure_selected_faces_area(obj,SelectAll=False):
 
-	previous_mode=obj.mode
+def measure_face_count(obj,SelectAll=False):
+	dg = bpy.context.evaluated_depsgraph_get()
+	bm = bmesh.new()
+	bm.from_object(obj, dg)
+	bm.transform(obj.matrix_world)
 
-	# Selection not accurate if not in object mode... 
-	bpy.ops.object.mode_set(mode='OBJECT')
-
-	selected_face_count=0
-	total_area=0
+	facecount=0
 
 	if SelectAll==True:
-		bpy_helper.select_object(obj,True)
-		bpy.ops.object.mode_set(mode='EDIT')
-		bpy.ops.mesh.select_all(action='SELECT')
-		bpy.ops.object.mode_set(mode='OBJECT')
+		facecount = len(bm.faces)
+	else:
+		for f in bm.faces:
+			if f.select:
+				facecount+=1
 
-	for f in obj.data.polygons:
-		if f.select:
-			selected_face_count+=1
-			total_area+=f.area
+	bm.free()    
+	
+	return facecount
 
-	face_data=[selected_face_count,total_area]
 
-	bpy.ops.object.mode_set(mode=previous_mode)
+def measure_face_area(obj,SelectAll=False):
+	dg = bpy.context.evaluated_depsgraph_get()
+	bm = bmesh.new()
+	bm.from_object(obj, dg)
+	bm.transform(obj.matrix_world)
 
-	return face_data
+	area=0
+
+	if SelectAll==True:
+		area = sum(f.calc_area() for f in bm.faces)
+	else:
+		area = sum(f.calc_area() for f in bm.faces if f.select)
+
+	bm.free()
+	
+	return area
+
 
 
 def assign_weight(obj,weight):
@@ -395,6 +425,8 @@ def measure_selected_edges():
 
 	return total_length
 	
+
+
 
 
 
