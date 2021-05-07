@@ -20,13 +20,13 @@ def select_object(theObject,selected):
 
 
 
-def find_and_remove_object_by_name(objname):
-	for obj in bpy.data.objects:
+#def find_and_remove_object_by_name(objname):
+#	for obj in bpy.data.objects:
 	#	print(obj.name)
-		if(obj.name==objname):
+#		if(obj.name==objname):
 	#		print("found")
 	#        bpy.context.scene.collection.objects.unlink(obj)
-			bpy.data.objects.remove(obj)
+#			bpy.data.objects.remove(obj)
 
 
 def parent_objects_keep_transform(parent,child):
