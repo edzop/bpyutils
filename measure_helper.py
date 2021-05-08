@@ -206,8 +206,6 @@ def calculate_cg(influence_objects):
 		print("Something went wrong... no total weight calculated")
 
 	assign_weight(cg_empty,total_weight)
-
-	bpy_helper.parent_objects_keep_transform(master_object,cg_empty)
 	
 	return cg_empty
 

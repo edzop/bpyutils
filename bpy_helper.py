@@ -3,7 +3,7 @@ import time
 import functools
 import bmesh
 
-def select_object(theObject,selected):
+def select_object(theObject,selected=True):
 
 	if bpy.context.active_object!=None:
 		if bpy.context.active_object.mode!='OBJECT':
@@ -19,14 +19,6 @@ def select_object(theObject,selected):
 		theObject.select_set(state=False)
 
 
-
-#def find_and_remove_object_by_name(objname):
-#	for obj in bpy.data.objects:
-	#	print(obj.name)
-#		if(obj.name==objname):
-	#		print("found")
-	#        bpy.context.scene.collection.objects.unlink(obj)
-#			bpy.data.objects.remove(obj)
 
 
 def parent_objects_keep_transform(parent,child):
