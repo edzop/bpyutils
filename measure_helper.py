@@ -122,7 +122,8 @@ def cg_mesh (obj):
 	ev_ob.to_mesh_clear()
 
 	if volume == 0: 
-		print ("ZERO VOLUME", obj.name)
+		#print ("ZERO VOLUME", obj.name)
+		pass
 	else: 
 		center /= volume
 
@@ -133,6 +134,12 @@ def cg_mesh (obj):
 
 # returns empty object representing center of gravity location
 def calculate_cg(influence_objects):
+
+	if influence_objects==None:
+		return None
+
+	if len(influence_objects)<1:
+		return None
 
 	master_object=influence_objects[0]
 
