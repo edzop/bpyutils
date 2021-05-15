@@ -431,6 +431,68 @@ def measure_selected_edges():
 	return total_length
 	
 
+def calculate_bend_stress(obj):
+
+	me=obj.data
+	bm = bmesh.new()
+	bm.from_mesh(me)
+
+	if not bm.loops.layers.color.get("color"):
+		color_layer = bm.loops.layers.color.new("color")
+	else:
+		color_layer = bm.loops.layers.color.get("color")
+
+	bend_data={}
+
+	min_max_angle=180
+	max_max_angle=0
+
+	for f in bm.faces:
+		
+		max_angle=0
+		
+		for edge in f.edges:
+			linked=edge.link_faces
+			for link_face in linked:
+				if f.index!=link_face.index:
+					angle=degrees(f.normal.angle(link_face.normal))
+					
+					if angle>max_angle:
+						max_angle=angle
+					#print("linked: %d angle: %f"%(link_face.index,angle))
+					
+		#print("Face: %d max_angle: %f"%(f.index,max_angle))
+		bend_data[f.index]=max_angle
+		
+		if max_angle>max_max_angle:
+			max_max_angle=max_angle
+			
+		if max_angle<min_max_angle:
+			min_max_angle=max_angle
+			
+	print(bend_data)
+	bend_diff=max_max_angle-min_max_angle
+
+	print("Min: %f Max: %f Diff: %f"%(min_max_angle,max_max_angle,bend_diff))
+
+	for f in bm.faces:
+		angle=bend_data[f.index]
+		this_diff=abs(min_max_angle-angle)
+			
+		color_value=0
+			
+		if this_diff>0:
+			color_value=this_diff/bend_diff
+			
+		rgb = [color_value,0,0,1]
+		
+		for loop in f.loops:
+			loop[color_layer]=rgb
+			
+		print("poly: %d - %f this_diff: %f color_value: %f"%(f.index,angle,this_diff,color_value))
+
+	bm.to_mesh(me)
+	me.update()
 
 
 

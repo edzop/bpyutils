@@ -73,6 +73,25 @@ def make_glass_material(name,color):
 
 	return mat
 
+
+def make_vertex_color_material(name):
+	mat = bpy.data.materials.new(name)
+	mat.use_nodes=True
+	tree=mat.node_tree
+	nodes=tree.nodes
+	links = mat.node_tree.links
+
+	shader_node = nodes['Principled BSDF']
+
+	color_node = nodes.new(type='ShaderNodeVertexColor')
+	color_node.location=0,0
+
+	links.new(color_node.outputs[0], shader_node.inputs[0])
+
+	return mat
+
+
+
 def make_metalic_material(name,color):
 	mat = bpy.data.materials.new(name)
 	mat.use_nodes=True
@@ -99,6 +118,15 @@ def make_diffuse_material(name,color):
 	#print(color)
 	new_material.diffuse_color = color
 	return new_material
+
+
+def get_material_vertex_colors():
+	material_name="vertex_colors"
+
+	if material_name in bpy.data.materials:
+		return bpy.data.materials[material_name]
+
+	return make_vertex_color_material(material_name)
 
 def get_material_support(): 
 	material_name="support"
