@@ -246,6 +246,8 @@ def export_dxf(filename):
 	except Exception as e:
 			print("DXF export failed - check export DXF addon is installed?")
 			return False
+
+	return True
 	
 
 
